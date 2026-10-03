@@ -39,7 +39,7 @@ Random Forest, top by impurity importance (rough ranking — impurity importance
 | tenure | 0.173 |
 | Charges.Monthly | 0.163 |
 
-Logistic Regression, largest associations (coefficients are in different units per feature — not directly comparable as "importance"):
+Logistic Regression, largest associations (coefficients on standardized features, so magnitudes are comparable — but correlated predictors split credit, and these are associations, not causal effects):
 
 | Direction | Features |
 |---|---|
