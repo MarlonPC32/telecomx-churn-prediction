@@ -1,54 +1,52 @@
 # Telecom X — Customer Churn Prediction
 
-Binary classification on 7,267 telecom customers: Logistic Regression vs. Random Forest to predict who cancels.
+Binary classification on 7,043 telecom customers: Logistic Regression vs. Random Forest to predict who cancels.
 
 ## Data
 
-- `telecomx_datos_tratados.csv` — customer records with demographics, services, contract, billing, and churn label. Cleaned in the [EDA stage](https://github.com/MarlonPC32/telecomx-churn-analysis).
-- 7,267 rows × 32 features after encoding. Imbalanced target: 25.7% churn (1,869) vs. 74.3% retained (5,398).
-- Train/test split 70/30 (`random_state=42`); test n = 2,181.
+- `telecomx_datos_tratados.csv` — customer records with demographics, services, contract, billing, and churn label. Cleaned in the [EDA stage](https://github.com/MarlonPC32/telecomx-churn-analysis), which also generates this file.
+- 7,043 rows × 30 predictors after encoding. Imbalanced target: 26.5% churn (1,869) vs. 73.5% retained (5,174). 224 records with unknown churn labels were excluded during cleaning — documented in the EDA notebook.
+- Stratified train/test split 70/30 (`random_state=42`); test n = 2,113.
 
 ## Pipeline
 
 1. Dropped `customerID` (identifier, no signal).
-2. One-hot encoded categoricals (`drop_first=True`).
-3. Engineered `Cuentas_Diarias` = monthly charges / 30 (estimated daily spend).
-4. Trained Logistic Regression (`max_iter=1000`) and Random Forest (`random_state=42`).
+2. Dropped `Cuentas_Diarias` — it is exactly `Charges.Monthly / 30` (correlation 1.00). A pure rescale adds no information: exactly redundant in the linear model, and it would only fragment feature-importance scores in the tree model.
+3. One-hot encoded categoricals (`drop_first=True`).
+4. Both models trained inside `StandardScaler` pipelines (scaling fit on training data only). An unscaled logistic regression failed to converge on these features, so convergence is explicitly verified (`n_iter_` < `max_iter`).
 
 ## Results
 
-Test set (n = 2,181), metrics for the churn class:
+Test set (n = 2,113), metrics for the churn class:
 
 | Model | Accuracy | Precision | Recall | F1 |
 |---|---|---|---|---|
-| Logistic Regression | 0.81 | 0.64 | 0.54 | 0.58 |
-| Random Forest | 0.80 | 0.61 | 0.51 | 0.55 |
+| Majority-class baseline | 0.735 | — | — | — |
+| Logistic Regression | 0.798 | 0.640 | 0.546 | 0.589 |
+| Random Forest | 0.784 | 0.622 | 0.478 | 0.540 |
 
-Logistic Regression outperformed Random Forest on every metric here — the linear model generalized better on this dataset. Full classification reports and confusion matrices are in the notebook.
+Both models beat the baseline, and logistic regression scores higher on every metric. The more informative reading is the confusion matrix: logistic regression still misses 255 of 561 churners (45%). Accuracy alone — 0.80 — would hide that.
 
-## What drives churn
+Full classification reports and confusion matrices are in the notebook.
 
-Random Forest feature importance (top 5):
+## What the models associate with churn
+
+Random Forest, top by impurity importance (rough ranking — impurity importance favors high-cardinality features and splits credit across correlated predictors):
 
 | Feature | Importance |
 |---|---|
-| Charges.Total | 0.170 |
-| tenure | 0.155 |
-| Cuentas_Diarias | 0.129 |
-| Charges.Monthly | 0.129 |
-| Contract_two year | 0.035 |
+| Charges.Total | 0.191 |
+| tenure | 0.173 |
+| Charges.Monthly | 0.163 |
 
-Logistic Regression coefficients (top 5):
+Logistic Regression, largest associations (coefficients are in different units per feature — not directly comparable as "importance"):
 
-| Feature | Coefficient |
+| Direction | Features |
 |---|---|
-| InternetService_fiber optic | 0.545 |
-| PaperlessBilling_Yes | 0.358 |
-| PaymentMethod_electronic check | 0.245 |
-| SeniorCitizen | 0.237 |
-| MultipleLines_No phone service | 0.234 |
+| Positive | Charges.Total (+0.74), fiber-optic internet (+0.55), paperless billing (+0.20), electronic check (+0.17) |
+| Protective | tenure (−1.49), two-year contract (−0.56), monthly charges (−0.47), one-year contract (−0.30) |
 
-Reading: spending behavior and tenure dominate the tree model; service configuration and payment method dominate the linear model. Fiber-optic customers paying by electronic check with paperless billing churn the most.
+These are associations in this snapshot, not causal drivers. The two models disagree on exact rankings, which is expected — they measure different things.
 
 ## Reproduce
 
@@ -56,8 +54,15 @@ Reading: spending behavior and tenure dominate the tree model; service configura
 pip install pandas numpy matplotlib seaborn scikit-learn
 ```
 
-Open `TelecomX_Churn_Prediction.ipynb` and run all cells. The notebook reads `telecomx_datos_tratados.csv` from the repo directory.
+Open `TelecomX_Churn_Prediction.ipynb` and run all cells. The notebook reads `telecomx_datos_tratados.csv` from the repo directory (committed here; generated by the EDA notebook).
+
+## Limitations
+
+- Single 70/30 split, no cross-validation.
+- Default 0.5 decision threshold — not tuned to any business cost of missed churners vs. unnecessary outreach.
+- No defined scoring date or churn horizon: this classifies a snapshot, not a validated early-warning system.
+- Whether tenure/charges values would be available *before* the outcome being predicted depends on the deployment setup, which is undefined here.
 
 ## Context
 
-Built for the Telecom X Data Science Challenge (Oracle Next Education). Same problem structure as credit default prediction — binary classification on tabular customer data.
+Built for the Telecom X Data Science Challenge (Oracle Next Education). The problem structure — binary classification on tabular customer data — is the same one behind credit default prediction.
